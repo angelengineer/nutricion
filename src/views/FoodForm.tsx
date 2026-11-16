@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Food, Nutrients, NutrientKey } from '../types';
 import { emptyNutrients, kcalFromMacros, NUTRIENT_KEYS, NUTRIENT_LABEL, NUTRIENT_UNIT } from '../lib/nutrients';
-import { uid } from '../db';
+import { uid } from '../store';
 import { NumInput, Segmented } from '../components/ui';
 
 export type FoodDraft = Partial<Omit<Food, 'per100'>> & { per100?: Partial<Nutrients> };
@@ -51,7 +51,6 @@ export function FoodForm(props: {
         updatedAt: now,
         name: name.trim(),
         brand: brand.trim() || undefined,
-        barcode: d.barcode,
         unit,
         servingG: servingG || undefined,
         per100: Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, Math.round((per100[k] || 0) * 100) / 100])) as unknown as Nutrients,

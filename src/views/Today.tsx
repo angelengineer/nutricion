@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useEffect, useState } from 'react';
 import type { Entry, Goals, Meal } from '../types';
-import { db, deleteEntry, entriesForDate, saveEntry, saveFood, uid } from '../db';
+import { copyDay, deleteEntry, entriesFor, saveFood, updateEntry, useStore, watchDay } from '../store';
 import { entryNutrients, fmt, MEALS, totals } from '../lib/nutrients';
 import { addDays, humanDate, parseISODate, today } from '../lib/date';
 import { MacroBar, Ring, Sheet, useToast } from '../components/ui';
@@ -12,21 +11,20 @@ import { FoodForm } from './FoodForm';
 export function Today(props: { date: string; setDate: (d: string) => void; goals: Goals; onAdd: (m: Meal) => void }) {
   const { date, goals } = props;
   const toast = useToast();
-  const entries = useLiveQuery(() => entriesForDate(date), [date]);
-  const prevCount = useLiveQuery(async () => (await entriesForDate(addDays(date, -1))).length, [date]) ?? 0;
+  const store = useStore();
+  const entries = store.ready ? entriesFor(store, date) : undefined;
+  const prevCount = entriesFor(store, addDays(date, -1)).length;
+  useEffect(() => watchDay(date), [date]);
+  useEffect(() => watchDay(addDays(date, -1)), [date]);
   const [editing, setEditing] = useState<{ entry: Entry; editFood?: boolean } | null>(null);
 
   const t = totals(entries ?? []);
   const remaining = goals.kcal - t.kcal;
   const isToday = date === today();
 
-  async function copyPrevDay() {
-    const prev = await entriesForDate(addDays(date, -1));
-    const now = Date.now();
-    await db.transaction('rw', db.entries, async () => {
-      for (const [i, e] of prev.entries()) await saveEntry({ ...e, id: uid(), date, createdAt: now + i, updatedAt: now });
-    });
-    toast(`${prev.length} alimentos copiados`);
+  function copyPrevDay() {
+    copyDay(addDays(date, -1), date);
+    toast(`${prevCount} alimentos copiados`);
   }
 
   return (
@@ -78,12 +76,14 @@ export function Today(props: { date: string; setDate: (d: string) => void; goals
       </section>
 
       {entries && entries.length === 0 && prevCount > 0 && (
-        <button className="btn ghost block" onClick={() => void copyPrevDay()}>
+        <button className="btn ghost block" onClick={copyPrevDay}>
           <IconCopy size={16} /> Copiar el día anterior ({prevCount})
         </button>
       )}
 
-      {MEALS.map((m) => {
+      {!entries && <div className="row" style={{ justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>}
+
+      {entries && MEALS.map((m) => {
         const items = (entries ?? []).filter((e) => e.meal === m.key);
         const mt = totals(items);
         return (
@@ -129,12 +129,12 @@ export function Today(props: { date: string; setDate: (d: string) => void; goals
             amount={editing.entry.amount}
             meal={editing.entry.meal}
             submitLabel="Guardar"
-            onSubmit={async (amount, meal) => {
-              await saveEntry({ ...editing.entry, amount, meal });
+            onSubmit={(amount, meal) => {
+              updateEntry({ ...editing.entry, amount, meal });
               setEditing(null);
             }}
-            onDelete={async () => {
-              await deleteEntry(editing.entry.id);
+            onDelete={() => {
+              deleteEntry(editing.entry.date, editing.entry.id);
               setEditing(null);
               toast('Eliminado');
             }}
@@ -148,14 +148,12 @@ export function Today(props: { date: string; setDate: (d: string) => void; goals
           <FoodForm
             draft={{ ...editing.entry, id: editing.entry.foodId, servingG: undefined }}
             submitLabel="Guardar"
-            onSubmit={async (food) => {
+            onSubmit={(food) => {
               const e = { ...editing.entry, name: food.name, brand: food.brand, unit: food.unit, per100: food.per100 };
-              await saveEntry(e);
+              updateEntry(e);
               // Also fix the library food so future logs are correct.
-              if (e.foodId) {
-                const lib = await db.foods.get(e.foodId);
-                if (lib && !lib.deleted) await saveFood({ ...lib, name: food.name, brand: food.brand, unit: food.unit, per100: food.per100 });
-              }
+              const lib = e.foodId ? store.foods.find((f) => f.id === e.foodId) : undefined;
+              if (lib) saveFood({ ...lib, name: food.name, brand: food.brand, unit: food.unit, per100: food.per100 });
               setEditing({ entry: e });
             }}
           />

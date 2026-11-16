@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import type { Food } from '../types';
-import { alive, db, deleteFood, saveFood } from '../db';
+import { deleteFood, saveFood, useStore } from '../store';
 import { fmt } from '../lib/nutrients';
 import { SearchInput, Sheet, Thumb, useToast } from '../components/ui';
 import { IconPlus, IconStar, IconTrash } from '../components/Icons';
@@ -12,7 +11,8 @@ export function Foods() {
   const toast = useToast();
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Partial<Food> | null>(null);
-  const foods = useLiveQuery(() => db.foods.filter(alive).toArray(), []) ?? [];
+  const { foods } = useStore();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const list = useMemo(() => {
     const fq = fold(q.trim());
@@ -38,13 +38,13 @@ export function Foods() {
         {list.map((f) => (
           <div key={f.id} className="item">
             <Thumb name={f.name} />
-            <button className="grow" style={{ textAlign: 'left', minWidth: 0 }} onClick={() => setEditing(f)}>
+            <button className="grow" style={{ textAlign: 'left', minWidth: 0 }} onClick={() => { setConfirmDelete(false); setEditing(f); }}>
               <div className="ellipsis">{f.name}</div>
               <div className="meta ellipsis num">
                 {f.brand ? `${f.brand} · ` : ''}{fmt(f.per100.kcal, 'kcal')} kcal · P {fmt(f.per100.protein)} · H {fmt(f.per100.carbs)} · G {fmt(f.per100.fat)}
               </div>
             </button>
-            <button className="icon-btn" aria-label="Favorito" onClick={() => void saveFood({ ...f, favorite: !f.favorite })}
+            <button className="icon-btn" aria-label="Favorito" onClick={() => saveFood({ ...f, favorite: !f.favorite })}
               style={{ color: f.favorite ? 'var(--carbs)' : undefined }}>
               <IconStar size={18} filled={f.favorite} />
             </button>
@@ -57,21 +57,29 @@ export function Foods() {
           <FoodForm
             draft={editing}
             submitLabel="Guardar"
-            onSubmit={async (food) => {
-              await saveFood(food);
+            onSubmit={(food) => {
+              saveFood(food);
               setEditing(null);
               toast('Guardado');
             }}
           />
-          {editing.id && (
-            <button className="btn danger block" style={{ marginTop: 12 }} onClick={async () => {
-              if (!confirm(`¿Eliminar «${editing.name}»? El historial no se modifica.`)) return;
-              await deleteFood(editing.id!);
-              setEditing(null);
-              toast('Eliminado');
-            }}>
+          {editing.id && !confirmDelete && (
+            <button className="btn danger block" style={{ marginTop: 12 }} onClick={() => setConfirmDelete(true)}>
               <IconTrash size={16} /> Eliminar alimento
             </button>
+          )}
+          {editing.id && confirmDelete && (
+            <div className="notice err stack" style={{ marginTop: 12 }}>
+              <span>¿Eliminar «{editing.name}»? Tu historial no cambia.</span>
+              <div className="row">
+                <button className="btn sm ghost grow" onClick={() => setConfirmDelete(false)}>Cancelar</button>
+                <button className="btn sm grow" style={{ background: 'var(--over)', color: '#fff' }} onClick={() => {
+                  deleteFood(editing.id!);
+                  setEditing(null);
+                  toast('Eliminado');
+                }}>Eliminar</button>
+              </div>
+            </div>
           )}
         </Sheet>
       )}

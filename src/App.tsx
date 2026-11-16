@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import type { Meal } from './types';
-import { getGoals } from './db';
-import { DEFAULT_GOALS } from './lib/nutrients';
+import { useStore } from './store';
 import { today } from './lib/date';
 import { ToastProvider } from './components/ui';
 import { IconBook, IconChart, IconPlus, IconSettings, IconToday } from './components/Icons';
@@ -16,7 +14,7 @@ type Tab = 'hoy' | 'historial' | 'alimentos' | 'ajustes';
 const TABS: Tab[] = ['hoy', 'historial', 'alimentos', 'ajustes'];
 
 const readTab = (): Tab => {
-  const h = location.hash.replace('#/', '') as Tab;
+  const h = location.hash.replace(/^#\/?/, '') as Tab;
   return TABS.includes(h) ? h : 'hoy';
 };
 
@@ -32,7 +30,8 @@ export default function App() {
   const [tab, setTabState] = useState<Tab>(readTab);
   const [date, setDate] = useState(today);
   const [adding, setAdding] = useState<Meal | null>(null);
-  const goals = useLiveQuery(() => getGoals(), []) ?? DEFAULT_GOALS;
+  const store = useStore();
+  const goals = store.goals;
 
   useEffect(() => {
     const onHash = () => setTabState(readTab());
@@ -54,17 +53,24 @@ export default function App() {
   }, []);
 
   const setTab = (t: Tab) => {
-    location.hash = `/${t}`;
+    location.hash = t;
     window.scrollTo({ top: 0 });
   };
 
   return (
     <ToastProvider>
       <main className="app">
+        {store.error && <div className="notice err" role="alert" style={{ marginBottom: 12 }}>{store.error}</div>}
+        {store.slow && !store.error && (
+          <div className="notice warn" style={{ marginBottom: 12 }}>La base de datos tarda en responder; lo que ves puede no estar actualizado.</div>
+        )}
+        {store.mode === 'local' && (
+          <div className="notice" style={{ marginBottom: 12 }}>Fuera de claude.ai: los datos se guardan solo en este navegador.</div>
+        )}
         {tab === 'hoy' && <Today date={date} setDate={setDate} goals={goals} onAdd={setAdding} />}
         {tab === 'historial' && <History goals={goals} openDay={(d) => { setDate(d); setTab('hoy'); }} />}
         {tab === 'alimentos' && <Foods />}
-        {tab === 'ajustes' && <Settings goals={goals} />}
+        {tab === 'ajustes' && <Settings />}
       </main>
 
       <nav className="nav">

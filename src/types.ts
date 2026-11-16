@@ -11,17 +11,10 @@ export interface Nutrients {
 
 export type NutrientKey = keyof Nutrients;
 
-/** Fields shared by every synced record. `deleted` is a tombstone so deletions propagate on sync. */
-export interface SyncMeta {
+export interface Food {
   id: string;
-  updatedAt: number;
-  deleted?: 0 | 1;
-}
-
-export interface Food extends SyncMeta {
   name: string;
   brand?: string;
-  barcode?: string;
   /** Values per 100 g (or 100 ml). */
   per100: Nutrients;
   /** Typical serving in grams, if known. */
@@ -30,11 +23,13 @@ export interface Food extends SyncMeta {
   favorite?: boolean;
   lastUsedAt?: number;
   createdAt: number;
+  updatedAt: number;
 }
 
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-export interface Entry extends SyncMeta {
+export interface Entry {
+  id: string;
   /** Local date, YYYY-MM-DD. */
   date: string;
   meal: Meal;
@@ -48,10 +43,12 @@ export interface Entry extends SyncMeta {
   createdAt: number;
 }
 
-export interface Weight extends SyncMeta {
-  /** id === date: one weigh-in per day. */
+/** One stored document per calendar day: keeps the store far below its document cap. */
+export interface Day {
   date: string;
-  kg: number;
+  entries: Entry[];
+  weightKg?: number | null;
+  updatedAt: number;
 }
 
 export interface Goals {
@@ -73,7 +70,7 @@ export interface Profile {
   objective: 'lose' | 'maintain' | 'gain';
 }
 
-/** Key-value settings that sync across devices. */
-export interface Setting extends SyncMeta {
-  value: unknown;
+export interface SettingsDoc {
+  goals: Goals;
+  profile: Profile | null;
 }

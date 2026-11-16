@@ -1,41 +1,40 @@
 # Nutrición
 
-Registro calórico y de macronutrientes. Minimalista, offline-first, sin servidor y gratis.
+Registro de calorías y macros. Minimalista, gratis, y con los datos en la nube.
 
-**App:** https://angelengineer.github.io/nutricion/
+**App:** https://claude.ai/artifact/U9xzuP1KrfULEJURhn1LaV (privada: solo la cuenta propietaria puede abrirla)
+
+La app es un [Artifact de claude.ai](https://claude.ai). Este repo contiene el código fuente.
 
 ## Funciones
 
-- **Foto de la etiqueta → alimento.** OCR en el dispositivo (Tesseract.js, sin claves) con un parser para etiquetas UE, EE. UU. y Japón (ES/EN/FR/DE/IT/PT/JA). Opcionalmente, Gemini (API key gratuita) para lectura mucho más robusta. Siempre se revisa antes de guardar, con aviso si las kcal no cuadran con los macros (Atwater).
-- **Código de barras / búsqueda** en Open Food Facts.
+- **Foto → alimento.** Claude lee la etiqueta nutricional (UE, EE. UU., Japón…) o estima un plato a partir de la foto, incluida la ración. Siempre revisas los valores antes de guardar, y la app avisa si las kcal no cuadran con los macros (Atwater).
+- **Describir con palabras.** «200 g de arroz con pollo al curry» → Claude estima los valores.
 - **Objetivos** de kcal, proteínas, hidratos, grasas, fibra, azúcares y sal; calculadora Mifflin–St Jeor.
-- **Diario** por comidas, copiar el día anterior, edición de cantidades y corrección de valores.
-- **Historial**: calorías vs objetivo, reparto medio de macros, adherencia, peso.
-- **PWA** instalable (Añadir a pantalla de inicio) y funcional sin conexión.
+- **Diario** por comidas, copiar el día anterior, editar cantidades y corregir valores.
+- **Historial**: calorías frente al objetivo, reparto medio de macros, adherencia y peso.
 
-## Arquitectura
+## Datos
 
-| Capa | Elección | Coste |
-|---|---|---|
-| Frontend | Vite + React + TypeScript | — |
-| Hosting | GitHub Pages (Actions) | gratis |
-| Datos | IndexedDB (Dexie) en el dispositivo | gratis |
-| Sincronización (opcional) | Gist privado en tu cuenta de GitHub, merge por registro (last-writer-wins + tombstones) | gratis |
-| Lectura de etiquetas | Tesseract.js (local) · Gemini (opcional, tier gratuito) | gratis |
-| Base de productos | Open Food Facts | gratis |
+Se guardan en la base de datos del Artifact (`db`). Las reglas de acceso solo dejan leer y escribir a la cuenta propietaria:
 
-Las claves (Gemini, token de GitHub) se guardan solo en `localStorage` del dispositivo y nunca se sincronizan.
+| Ruta | Contenido |
+|---|---|
+| `foods/<id>` | alimento guardado (valores por 100 g/ml) |
+| `days/<YYYY-MM-DD>` | `{ date, entries[], weightKg, updatedAt }`, un documento por día |
+| `settings/main` | `{ goals, profile }` |
 
-## Configuración
+Como Claude tiene acceso a esa base de datos, puedes pedírselo desde cualquier conversación de Claude Code: «¿cuánta proteína he comido de media esta semana?» o «corrige la cena de ayer».
 
-1. **Gemini (recomendado):** crea una API key en <https://aistudio.google.com/apikey> → Ajustes → *Lectura de etiquetas*.
-2. **Sincronización entre dispositivos:** crea un token clásico con *solo* el scope `gist` (<https://github.com/settings/tokens/new?scopes=gist>) → Ajustes → *Sincronización*. Repite en cada dispositivo.
+Fuera de claude.ai (por ejemplo con `npm run dev`), la app usa `localStorage` y desactiva las funciones de Claude.
 
 ## Desarrollo
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/nutricion/
-npm test         # tests del parser de etiquetas
-npm run build
+npm run dev      # vista local (modo localStorage)
+npm test
+npm run build    # → dist/nutricion.html (página única para el Artifact)
 ```
+
+Para publicar una versión nueva, sube `dist/nutricion.html` con la herramienta Artifact de Claude Code y la misma URL. Capabilities: `db` (reglas `read/write: owner`), `sample` (`images: true`) y `downloads`.

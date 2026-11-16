@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import type { Goals } from '../types';
-import { alive, db, entriesBetween, saveWeight } from '../db';
+import { saveWeight, useStore } from '../store';
 import { fmt, totals } from '../lib/nutrients';
 import { addDays, dayMonth, humanDate, rangeDays, shortDay, today } from '../lib/date';
 import { NumInput, Segmented, useToast } from '../components/ui';
@@ -17,18 +16,21 @@ export function History(props: { goals: Goals; openDay: (d: string) => void }) {
   const { goals } = props;
   const [range, setRange] = useState(7);
   const end = today();
-  const start = addDays(end, -(range - 1));
-  const entries = useLiveQuery(() => entriesBetween(start, end), [start, end]) ?? [];
-  const weights = useLiveQuery(
-    () => db.weights.where('date').between(addDays(end, -364), end, true, true).filter(alive).sortBy('date'),
-    [end],
-  ) ?? [];
-
-  const days = useMemo(() => {
-    const by = new Map<string, typeof entries>();
-    for (const e of entries) by.set(e.date, [...(by.get(e.date) ?? []), e]);
-    return rangeDays(end, range).map((d) => ({ date: d, n: totals(by.get(d) ?? []), count: by.get(d)?.length ?? 0 }));
-  }, [entries, end, range]);
+  const store = useStore();
+  const days = useMemo(
+    () => rangeDays(end, range).map((d) => {
+      const es = store.days[d]?.entries ?? [];
+      return { date: d, n: totals(es), count: es.length };
+    }),
+    [store.days, end, range],
+  );
+  const weights = useMemo(
+    () => Object.values(store.days)
+      .filter((d) => typeof d.weightKg === 'number' && d.weightKg > 0 && d.date >= addDays(end, -364))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({ date: d.date, kg: d.weightKg as number })),
+    [store.days, end],
+  );
 
   const logged = days.filter((d) => d.count > 0);
   const avg = logged.length ? totals([]) : null;
@@ -196,14 +198,14 @@ function WeightCard({ weights, range }: { weights: { date: string; v: number }[]
       ) : (
         <p className="muted small" style={{ marginBottom: 12 }}>Registra tu peso varios días para ver la tendencia.</p>
       )}
-      <form className="row" onSubmit={async (e) => {
+      <form className="row" onSubmit={(e) => {
         e.preventDefault();
         if (!kg) return;
-        await saveWeight(t, kg);
+        saveWeight(t, kg);
         setKg(undefined);
         toast('Peso guardado');
       }}>
-        <div className="grow"><NumInput value={kg} onChange={setKg} suffix="kg" placeholder={todays ? `Hoy: ${kgFmt(todays)}` : 'Peso de hoy'} /></div>
+        <div className="grow" id="weight-input"><NumInput value={kg} onChange={setKg} suffix="kg" placeholder={todays ? `Hoy: ${kgFmt(todays)}` : 'Peso de hoy'} /></div>
         <button className="btn" type="submit" disabled={!kg}>Guardar</button>
       </form>
     </section>
